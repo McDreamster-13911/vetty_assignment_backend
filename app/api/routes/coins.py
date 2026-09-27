@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+from app.core.cache import cache_get, cache_set
 from app.core.config import settings
 import httpx
 
@@ -6,10 +7,15 @@ router = APIRouter()
 
 async def fetch_categories() -> list[dict]:
     url = f"{settings.coingecko_base_url}/coins/categories"
+    cached = cache_get(url)
+    if cached is not None:
+        return cached
     async with httpx.AsyncClient(timeout=6.0) as client:
         response = await client.get(url)
         response.raise_for_status()
-    return response.json()
+    data = response.json()
+    cache_set(url, data)
+    return data
 
 
 @router.get("/coin-categories")
@@ -27,13 +33,18 @@ async def get_coin_categories(
 
 async def fetch_coin_list() -> list[dict]:
     url = f"{settings.coingecko_base_url}/coins/list"
+    cached = cache_get(url)
+    if cached is not None:
+        return cached
     try:
         async with httpx.AsyncClient(timeout=6.0) as client:
             response = await client.get(url)
             response.raise_for_status()
-        return response.json()
+        data = response.json()
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Failed to fetch coins") from None
+    cache_set(url, data)
+    return data
 
 
 @router.get("/coins")
@@ -90,6 +101,9 @@ async def fetch_markets(
     if category:
         params["category"] = category
     url = f"{settings.coingecko_base_url}/coins/markets"
+    cached = cache_get(url, params)
+    if cached is not None:
+        return cached
     try:
         async with httpx.AsyncClient(timeout=6.0) as client:
             response = await client.get(url, params=params)
@@ -97,6 +111,7 @@ async def fetch_markets(
         data = response.json()
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Failed to fetch market data") from None
+    cache_set(url, data, params)
     await notify_market_fetch(coin_id, category, page_num, len(data))
     return data
 

@@ -166,3 +166,45 @@ def test_fetch_markets_error_does_not_notify(monkeypatch):
         asyncio.run(fetch_markets("bitcoin", None, 1, 10))
     assert exc.value.status_code == 502
     assert posts == []
+
+
+def test_markets_cache_expires(monkeypatch):
+    from app.core import cache as cache_module
+
+    cache_module._store.clear()
+    now = {"t": 1000.0}
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: now["t"])
+    gets = []
+    posts = []
+
+    class FakeClient:
+        def __init__(self, timeout=6.0):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params=None):
+            gets.append(url)
+            return _FakeResponse([{"id": "bitcoin"}])
+
+        async def post(self, url, json=None):
+            posts.append(url)
+
+    monkeypatch.setattr("app.api.routes.coins.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        "app.api.routes.coins.settings.webhook_url", "https://example.test/hook"
+    )
+
+    asyncio.run(fetch_markets("bitcoin", "layer-1", 1, 10))
+    asyncio.run(fetch_markets("bitcoin", "layer-1", 1, 10))
+    assert len(gets) == 1
+    assert len(posts) == 1
+
+    now["t"] += settings.cache_ttl_seconds + 1
+    asyncio.run(fetch_markets("bitcoin", "layer-1", 1, 10))
+    assert len(gets) == 2
+    assert len(posts) == 2
