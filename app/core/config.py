@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     coingecko_base_url: str = "https://api.coingecko.com/api/v3"
     cache_ttl_seconds: int = 60
     api_key: str = "something"
+    webhook_url: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
