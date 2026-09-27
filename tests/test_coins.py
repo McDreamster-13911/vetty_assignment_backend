@@ -6,9 +6,11 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.routes.coins import fetch_markets
+from app.core.config import settings
 from app.main import app
 
 client = TestClient(app)
+auth = {"X-API-Key": settings.api_key}
 
 
 def test_categories_second_page(monkeypatch):
@@ -18,7 +20,11 @@ def test_categories_second_page(monkeypatch):
         return categories
 
     monkeypatch.setattr("app.api.routes.coins.fetch_categories", fake_fetch)
-    response = client.get("/coin-categories", params={"page_num": 2, "per_page": 10})
+    response = client.get(
+        "/coin-categories",
+        params={"page_num": 2, "per_page": 10},
+        headers=auth,
+    )
     assert response.status_code == 200
     body = response.json()
     assert len(body) == 10
@@ -34,7 +40,7 @@ def test_list_coins_second_page(monkeypatch):
         return coins
 
     monkeypatch.setattr("app.api.routes.coins.fetch_coin_list", fake_fetch)
-    response = client.get("/coins", params={"page_num": 2, "per_page": 10})
+    response = client.get("/coins", params={"page_num": 2, "per_page": 10}, headers=auth)
     assert response.status_code == 200
     body = response.json()
     assert len(body) == 10
@@ -52,7 +58,7 @@ def test_list_coins_skips_placeholder(monkeypatch):
         return coins
 
     monkeypatch.setattr("app.api.routes.coins.fetch_coin_list", fake_fetch)
-    response = client.get("/coins", params={"page_num": 1, "per_page": 10})
+    response = client.get("/coins", params={"page_num": 1, "per_page": 10}, headers=auth)
     assert response.status_code == 200
     body = response.json()
     assert "_" not in {coin["id"] for coin in body}
@@ -60,7 +66,7 @@ def test_list_coins_skips_placeholder(monkeypatch):
 
 
 def test_markets_requires_a_filter():
-    response = client.get("/markets")
+    response = client.get("/markets", headers=auth)
     assert response.status_code == 422
 
 
@@ -81,10 +87,16 @@ def test_markets_passes_both_filters(monkeypatch):
             "page_num": 2,
             "per_page": 10,
         },
+        headers=auth,
     )
     assert response.status_code == 200
     assert response.json() == payload
     assert calls == [("bitcoin", "layer-1", 2, 10)]
+
+
+def test_coins_rejects_a_wrong_api_key():
+    response = client.get("/coins", headers={"X-API-Key": "wrong"})
+    assert response.status_code == 401
 
 
 class _FakeResponse:
