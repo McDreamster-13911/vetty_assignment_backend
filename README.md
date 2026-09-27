@@ -28,6 +28,9 @@ CACHE_TTL_SECONDS=60
 WEBHOOK_URL=
 ```
 
+Note : The WEBHOOK_URL can be obtained from webhook.site
+And the API_KEY can be changed and set as needed for the env file
+
 ```powershell
 fastapi dev app/main.py
 ```
